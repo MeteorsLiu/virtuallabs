@@ -1,0 +1,7 @@
+Name: k8s
+Brokers:
+- localhost:9092
+Group: adhoc
+Topic: k8s
+Offset: first
+Consumers: 1

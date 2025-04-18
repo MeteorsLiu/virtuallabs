@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: {{.Vmname}}
+  name: {{.Vmname}}
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{.Vmname}}
+  template:
+    metadata:
+      labels:
+        app: {{.Vmname}}
+    spec:
+      containers:
+        - image: dorowu/ubuntu-desktop-lxde-vnc:latest
+          imagePullPolicy: IfNotPresent
+          name: novnc
+          ports:
+            - name: novnc
+              containerPort: {{.VmPort}}
+      restartPolicy: Always
