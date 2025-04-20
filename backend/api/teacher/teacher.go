@@ -89,7 +89,6 @@ func GetTeachers(c *gin.Context) {
 	var teachers []models.User
 	query := api.DB.Preload("Role").
 		Preload("Profile").
-		Preload("TeacherCourses.Course"). // 预加载教师课程
 		Joins("JOIN user_roles ON users.user_id = user_roles.user_id").
 		Where("user_roles.role = 'teacher'")
 

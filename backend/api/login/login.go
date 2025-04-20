@@ -1,6 +1,7 @@
 package login
 
 import (
+	"encoding/base64"
 	"errors"
 	"net/http"
 	"time"
@@ -21,7 +22,7 @@ type RegisterRequest struct {
 	StudentNo string `json:"studentNo,omitempty"` // 仅学生需要
 	Gender    string `json:"gender" binding:"oneof=male female other"`
 	Email     string `json:"email" binding:"required,email"`
-	Phone     string `json:"phone" binding:"omitempty,e164"`
+	Phone     string `json:"phone"`
 }
 
 type LoginRequest struct {
@@ -148,9 +149,10 @@ func LoginHandler(c *gin.Context) {
 		return
 	}
 
+	hashedPassword, _ := base64.StdEncoding.DecodeString(user.PasswordHash)
 	// 验证密码
 	if err := bcrypt.CompareHashAndPassword(
-		[]byte(user.PasswordHash),
+		hashedPassword,
 		[]byte(req.Password),
 	); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "密码错误"})

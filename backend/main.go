@@ -7,6 +7,7 @@ import (
 	"github.com/MeteorsLiu/virtuallabs/backend/api/class"
 	"github.com/MeteorsLiu/virtuallabs/backend/api/courses"
 	"github.com/MeteorsLiu/virtuallabs/backend/api/experiment"
+	"github.com/MeteorsLiu/virtuallabs/backend/api/login"
 	"github.com/MeteorsLiu/virtuallabs/backend/api/student"
 	"github.com/MeteorsLiu/virtuallabs/backend/api/teacher"
 	"github.com/MeteorsLiu/virtuallabs/backend/api/vm"
@@ -21,6 +22,10 @@ func main() {
 
 	api.InitDB("123456", dsn)
 	router := gin.Default()
+
+	router.Use(api.UseCORS())
+
+	login.Register(router)
 
 	vm.Register(router)
 	class.Register(router)

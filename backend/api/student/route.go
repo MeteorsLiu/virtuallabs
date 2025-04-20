@@ -6,10 +6,12 @@ import (
 )
 
 func Register(router *gin.Engine) {
+	router.Use(api.JWTAuthMiddleware())
+
 	student := router.Group("/students")
 	{
-		student.POST("", api.RoleMiddleware("admin"), CreateStudent)
-		student.GET("", api.RoleMiddleware("teacher", "admin"), GetStudents)
+		student.POST("/", api.RoleMiddleware("admin"), CreateStudent)
+		student.GET("/", api.RoleMiddleware("teacher", "admin"), GetStudents)
 		student.GET("/:id", api.RoleMiddleware("teacher", "admin"), GetStudentDetails)
 		student.PUT("/:id", UpdateStudent) // 学生可修改自己
 		student.DELETE("/:id", api.RoleMiddleware("admin"), DeleteStudent)

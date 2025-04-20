@@ -4,7 +4,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
 	"github.com/MeteorsLiu/virtuallabs/backend/api"
 	"github.com/MeteorsLiu/virtuallabs/backend/models"
@@ -22,7 +21,7 @@ import (
 type CourseCreateRequest struct {
 	CourseName      string `json:"courseName" binding:"required,min=3,max=100"`
 	CoverURL        string `json:"coverUrl" binding:"omitempty,url"`
-	Description     string `json:"description" binding:"max=500"`
+	Description     string `json:"description"`
 	DifficultyLevel string `json:"difficultyLevel" binding:"oneof=beginner intermediate advanced"`
 }
 
@@ -173,7 +172,7 @@ func DeleteCourse(c *gin.Context) {
 type ChapterRequest struct {
 	ChapterTitle       string `json:"chapterTitle" binding:"required,min=3,max=255"`
 	ChapterDescription string `json:"chapterDescription" binding:"max=1000"`
-	VideoURL           string `json:"videoUrl" binding:"required,url"`
+	VideoURL           string `json:"videoUrl"`
 	SortOrder          int    `json:"sortOrder" binding:"min=0"`
 }
 
@@ -211,11 +210,11 @@ func CreateChapter(c *gin.Context) {
 
 // 评分项管理
 type AssessmentRequest struct {
-	AssessmentName string    `json:"assessmentName" binding:"required,min=3,max=100"`
-	AssessmentType string    `json:"assessmentType" binding:"oneof=exam homework experiment quiz"`
-	MaxScore       float64   `json:"maxScore" binding:"required,min=0,max=1000"`
-	Weight         float64   `json:"weight" binding:"min=0,max=100"`
-	AssessmentDate time.Time `json:"assessmentDate" binding:"required"`
+	AssessmentName string  `json:"assessmentName" binding:"required,min=3,max=100"`
+	AssessmentType string  `json:"assessmentType" binding:"oneof=exam homework experiment quiz"`
+	MaxScore       float64 `json:"maxScore" binding:"required,min=0,max=1000"`
+	Weight         float64 `json:"weight" binding:"min=0,max=100"`
+	AssessmentDate string  `json:"assessmentDate" binding:"required"`
 }
 
 // 创建评分项（教师权限）
@@ -234,13 +233,14 @@ func CreateAssessment(c *gin.Context) {
 		return
 	}
 
+	parsedTime, _ := api.ToTime(req.AssessmentDate)
 	assessment := models.CourseAssessment{
 		CourseID:       courseID,
 		AssessmentName: req.AssessmentName,
 		AssessmentType: req.AssessmentType,
 		MaxScore:       req.MaxScore,
 		Weight:         req.Weight,
-		AssessmentDate: req.AssessmentDate,
+		AssessmentDate: parsedTime,
 	}
 
 	if err := api.DB.Create(&assessment).Error; err != nil {
@@ -431,11 +431,6 @@ func GetChapters(c *gin.Context) {
 		return
 	}
 
-	// 移除课程信息的循环引用
-	for i := range chapters {
-		chapters[i].Course = models.Course{} // 清空嵌套的课程对象
-	}
-
 	c.JSON(http.StatusOK, chapters)
 }
 
@@ -530,6 +525,85 @@ func CreateQuestion(c *gin.Context) {
 	api.DB.Preload("Options").First(&question, question.QuestionID)
 
 	c.JSON(http.StatusCreated, question)
+}
+
+func GetCourseAssessments(c *gin.Context) {
+	// 参数解析
+	courseID, _ := strconv.Atoi(c.Query("courseId"))
+
+	// 构建查询
+	query := api.DB
+	if courseID > 0 {
+		query = query.Where("course_id = ?", courseID)
+	}
+
+	// 获取评分项
+	var assessments []models.CourseAssessment
+	if err := query.Order("assessment_date ASC").Find(&assessments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取评分项失败"})
+		return
+	}
+
+	c.JSON(http.StatusOK, assessments)
+}
+
+func GetAssessmentQuestions(c *gin.Context) {
+	// 获取当前用户信息
+	currentUserID := c.GetInt("userID")
+	userRole := c.GetString("role")
+
+	// 解析参数
+	assessmentID, err := strconv.Atoi(c.Param("assessmentId"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "无效的评分项ID"})
+		return
+	}
+
+	// 验证评分项存在性
+	var assessment models.CourseAssessment
+	if err := api.DB.Preload("Course").
+		First(&assessment, assessmentID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "评分项不存在"})
+		return
+	}
+
+	// 权限验证
+	if userRole == "student" {
+		// 验证学生是否属于该课程
+		var enrollment models.Enrollment
+		if err := api.DB.Where("student_id = ? AND course_id = ?",
+			currentUserID, assessment.CourseID).First(&enrollment).Error; err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无课程访问权限"})
+			return
+		}
+	} else if userRole == "teacher" {
+		// 验证教师是否负责该课程
+		if !isCourseTeacher(currentUserID, assessment.CourseID) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "无课程操作权限"})
+			return
+		}
+	}
+
+	// 获取题目列表
+	var questions []models.Question
+	if err := api.DB.Preload("Options").
+		Where("assessment_id = ?", assessmentID).
+		Order("question_id ASC"). // 按创建顺序排序
+		Find(&questions).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "获取题目失败"})
+		return
+	}
+
+	// 学生访问时隐藏正确答案
+	if userRole == "student" {
+		for i := range questions {
+			for j := range questions[i].Options {
+				questions[i].Options[j].IsCorrect = false // 清空正确答案标记
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, questions)
 }
 
 // 校验题目选项逻辑

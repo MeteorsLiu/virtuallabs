@@ -67,8 +67,8 @@ type Course struct {
 	DifficultyLevel string    `gorm:"type:ENUM('beginner', 'intermediate', 'advanced');default:'beginner'" json:"difficultyLevel"`
 	CreatedAt       time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;not null" json:"createdAt"`
 
-	CourseChapters    []CourseChapter    `gorm:"-:migration" json:"chapters,omitempty"`
-	CourseAssessments []CourseAssessment `gorm:"-:migration" json:"assessments,omitempty"`
+	CourseChapters    []CourseChapter    `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"chapters,omitempty"`
+	CourseAssessments []CourseAssessment `gorm:"constraint:OnUpdate:CASCADE,OnDelete:SET NULL" json:"assessments,omitempty"`
 }
 
 type CourseChapter struct {
@@ -76,11 +76,11 @@ type CourseChapter struct {
 	CourseID           int       `json:"courseId"`
 	ChapterTitle       string    `gorm:"not null;size:255" json:"chapterTitle"`
 	ChapterDescription string    `gorm:"type:TEXT" json:"chapterDescription"`
-	VideoURL           string    `gorm:"size:512;not null" json:"videoUrl"`
+	VideoURL           string    `json:"videoUrl,omitempty" binding:"omitempty,url"`
 	SortOrder          int       `gorm:"default:0" json:"sortOrder"`
 	CreatedAt          time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;not null" json:"createdAt"`
 
-	Course Course `gorm:"foreignKey:CourseID" json:"course"`
+	Course Course `gorm:"foreignKey:CourseID;references:CourseID;-:migration" json:"course"`
 }
 
 type CourseAssessment struct {
@@ -93,7 +93,7 @@ type CourseAssessment struct {
 	AssessmentDate time.Time `json:"assessmentDate"`
 	CreatedAt      time.Time `gorm:"type:timestamp;default:CURRENT_TIMESTAMP;not null" json:"createdAt"`
 
-	Course Course `gorm:"foreignKey:CourseID" json:"course"`
+	Course Course `gorm:"foreignKey:CourseID;references:CourseID;-:migration" json:"course"`
 }
 
 type StudentGrade struct {

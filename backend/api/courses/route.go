@@ -10,8 +10,8 @@ func Register(router *gin.Engine) {
 	course := router.Group("/courses")
 	course.Use(api.JWTAuthMiddleware())
 	{
-		course.POST("", api.RoleMiddleware("teacher"), CreateCourse)
-		course.GET("", GetCourses)
+		course.POST("/", api.RoleMiddleware("teacher"), CreateCourse)
+		course.GET("/", GetCourses)
 		course.GET("/:courseId", GetCourseDetail)
 		course.PUT("/:courseId", api.RoleMiddleware("teacher"), UpdateCourse)
 		course.DELETE("/:courseId", api.RoleMiddleware("teacher"), DeleteCourse)
@@ -23,7 +23,12 @@ func Register(router *gin.Engine) {
 		// 评分项路由
 		course.POST("/:courseId/assessments", api.RoleMiddleware("teacher"), CreateAssessment)
 
+		course.GET("/assessments/", GetCourseAssessments)
+
 		course.POST("/assessments/:assessmentId/submit", api.RoleMiddleware("student"), SubmitAnswer)
 
+		course.POST("/assessments/question/", api.RoleMiddleware("teacher"), CreateQuestion)
+
+		course.GET("/assessments/:assessmentId/questions", GetAssessmentQuestions)
 	}
 }

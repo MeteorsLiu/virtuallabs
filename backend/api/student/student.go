@@ -100,7 +100,6 @@ func GetStudents(c *gin.Context) {
 	query := api.DB.Preload("Role").
 		Preload("Profile").
 		Preload("StudentInfo").
-		Preload("StudentClasses.Class").
 		Joins("JOIN user_roles ON users.user_id = user_roles.user_id").
 		Where("user_roles.role = 'student'")
 

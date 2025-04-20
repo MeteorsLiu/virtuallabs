@@ -1,12 +1,13 @@
+import { BookOpen, Plus, Trash2, Upload, Video } from 'lucide-react';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BookOpen, Plus, Trash2, Clock, Award, Upload, Video } from 'lucide-react';
+import { apiClient } from '../../api/client';
 
 interface Chapter {
   title: string;
   duration: string;
   description: string;
-  videoUrl: string;
+  content: string;
   videoFile?: File;
 }
 
@@ -14,15 +15,19 @@ function CreateCourse() {
   const navigate = useNavigate();
   const [courseTitle, setCourseTitle] = useState('');
   const [courseDescription, setDescription] = useState('');
-  const [difficulty, setDifficulty] = useState('intermediate');
+  const [difficulty, setDifficulty] = useState<string>('beginner');
   const [chapters, setChapters] = useState<Chapter[]>([
-    { title: '', duration: '', description: '', videoUrl: '' }
+    { title: '', duration: '', description: '', content: '' }
   ]);
+  const [coverImage, setCoverImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCoverImage(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -37,8 +42,7 @@ function CreateCourse() {
       const newChapters = [...chapters];
       newChapters[index] = {
         ...newChapters[index],
-        videoFile: file,
-        videoUrl: URL.createObjectURL(file)
+        videoFile: file
       };
       setChapters(newChapters);
     }
@@ -46,26 +50,18 @@ function CreateCourse() {
 
   const removeVideo = (index: number) => {
     const newChapters = [...chapters];
-    if (newChapters[index].videoUrl) {
-      URL.revokeObjectURL(newChapters[index].videoUrl);
-    }
     newChapters[index] = {
       ...newChapters[index],
-      videoUrl: '',
       videoFile: undefined
     };
     setChapters(newChapters);
   };
 
   const addChapter = () => {
-    setChapters([...chapters, { title: '', duration: '', description: '', videoUrl: '' }]);
+    setChapters([...chapters, { title: '', duration: '', description: '', content: '' }]);
   };
 
   const removeChapter = (index: number) => {
-    const chapter = chapters[index];
-    if (chapter.videoUrl) {
-      URL.revokeObjectURL(chapter.videoUrl);
-    }
     setChapters(chapters.filter((_, i) => i !== index));
   };
 
@@ -75,19 +71,62 @@ function CreateCourse() {
     setChapters(newChapters);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Here you would typically send the data to your backend
-    console.log({
-      courseTitle,
-      courseDescription,
-      difficulty,
-      chapters: chapters.map(chapter => ({
-        ...chapter,
-        videoFile: chapter.videoFile?.name
-      }))
-    });
-    navigate('/courses');
+    setLoading(true);
+    setError(null);
+
+    try {
+      // 1. Create course
+      const course = await apiClient.createCourse({
+        courseName: courseTitle,
+        description: courseDescription,
+        difficultyLevel: difficulty,
+      });
+
+      // 2. Upload cover image if exists
+      if (coverImage) {
+        const uploadResult = await apiClient.uploadFile(coverImage, {
+          uploadType: 'courseCover',
+          targetId: course.courseId
+        });
+
+        // Update course with cover image URL
+        await apiClient.updateCourse(course.courseId, {
+            coverUrl: uploadResult.url
+        });
+      }
+
+      // 3. Create chapters and upload videos
+      for (let i = 0; i < chapters.length; i++) {
+        const chapter = chapters[i];
+
+        // Upload video if exists
+        let videoUrl: string | undefined;
+        if (chapter.videoFile) {
+          const uploadResult = await apiClient.uploadFile(chapter.videoFile, {
+            uploadType: 'chapterVideo',
+            targetId: course.courseId
+          });
+          videoUrl = uploadResult.url;
+        }
+
+        // Create chapter
+        await apiClient.createChapter(course.courseId, {
+          chapterTitle: chapter.title,
+          chapterDescription: chapter.description,
+          videoUrl,
+          sortOrder: i + 1
+        });
+      }
+
+      navigate(`/courses/${course.courseId}`);
+    } catch (err) {
+      console.error('Error creating course:', err);
+      setError('创建课程失败，请重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -104,6 +143,12 @@ function CreateCourse() {
           取消
         </button>
       </div>
+
+      {error && (
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+          {error}
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-3 gap-6">
@@ -166,7 +211,10 @@ function CreateCourse() {
                   />
                   <button
                     type="button"
-                    onClick={() => setImagePreview('')}
+                    onClick={() => {
+                      setCoverImage(null);
+                      setImagePreview('');
+                    }}
                     className="absolute top-2 right-2 bg-white rounded-full p-1 shadow-md"
                   >
                     <Trash2 className="h-4 w-4 text-gray-500" />
@@ -265,14 +313,28 @@ function CreateCourse() {
                   />
                 </div>
 
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    章节内容
+                  </label>
+                  <textarea
+                    value={chapter.content}
+                    onChange={(e) => updateChapter(index, 'content', e.target.value)}
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md font-mono text-sm"
+                    placeholder="使用Markdown格式编写章节内容"
+                    required
+                  />
+                </div>
+
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     章节视频
                   </label>
-                  {chapter.videoUrl ? (
+                  {chapter.videoFile ? (
                     <div className="relative rounded-lg overflow-hidden">
                       <video
-                        src={chapter.videoUrl}
+                        src={URL.createObjectURL(chapter.videoFile)}
                         className="w-full h-48 object-cover"
                         controls
                       />
@@ -312,14 +374,16 @@ function CreateCourse() {
             type="button"
             onClick={() => navigate('/courses')}
             className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+            disabled={loading}
           >
             取消
           </button>
           <button
             type="submit"
-            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700"
+            className="px-4 py-2 border border-transparent rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading}
           >
-            创建课程
+            {loading ? '创建中...' : '创建课程'}
           </button>
         </div>
       </form>

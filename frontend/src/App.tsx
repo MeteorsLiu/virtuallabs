@@ -1,8 +1,12 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, useLocation, Navigate } from 'react-router-dom';
 import { Users, BookOpen, FlaskRound as Flask, Monitor, Search } from 'lucide-react';
+import Login from './pages/auth/Login';
+import Register from './pages/auth/Register';
 import ClassList from './pages/classes/ClassList';
 import ClassDetail from './pages/classes/ClassDetail';
+import CreateClass from './pages/classes/CreateClass';
+import AddStudent from './pages/classes/AddStudent';
 import CourseList from './pages/courses/CourseList';
 import CourseDetail from './pages/courses/CourseDetail';
 import CourseChapter from './pages/courses/CourseChapter';
@@ -14,6 +18,11 @@ import CreateLab from './pages/labs/CreateLab';
 function Navigation() {
   const location = useLocation();
   const currentPath = location.pathname.split('/')[1] || 'classes';
+
+  // Don't show navigation on auth pages
+  if (location.pathname === '/login' || location.pathname === '/register') {
+    return null;
+  }
 
   return (
     <nav className="bg-white shadow-sm">
@@ -69,14 +78,32 @@ function Navigation() {
               />
               <Search className="absolute right-3 top-2 h-4 w-4 text-gray-400" />
             </div>
-            <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800">
-              教师
-            </span>
+            <button
+              onClick={() => {
+                localStorage.removeItem('accessToken');
+                window.location.href = '/login';
+              }}
+              className="text-gray-500 hover:text-gray-700"
+            >
+              退出
+            </button>
           </div>
         </div>
       </div>
     </nav>
   );
+}
+
+// Protected Route component
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = !!localStorage.getItem('accessToken');
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return <>{children}</>;
 }
 
 function App() {
@@ -86,16 +113,21 @@ function App() {
         <Navigation />
         <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <Routes>
-            <Route path="/" element={<ClassList />} />
-            <Route path="/classes" element={<ClassList />} />
-            <Route path="/classes/:id" element={<ClassDetail />} />
-            <Route path="/courses" element={<CourseList />} />
-            <Route path="/courses/create" element={<CreateCourse />} />
-            <Route path="/courses/:id" element={<CourseDetail />} />
-            <Route path="/courses/:courseId/chapter/:chapterId" element={<CourseChapter />} />
-            <Route path="/labs" element={<LabList />} />
-            <Route path="/labs/create" element={<CreateLab />} />
-            <Route path="/labs/:id" element={<LabDetail />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            
+            <Route path="/" element={<ProtectedRoute><ClassList /></ProtectedRoute>} />
+            <Route path="/classes" element={<ProtectedRoute><ClassList /></ProtectedRoute>} />
+            <Route path="/classes/create" element={<ProtectedRoute><CreateClass /></ProtectedRoute>} />
+            <Route path="/classes/:id" element={<ProtectedRoute><ClassDetail /></ProtectedRoute>} />
+            <Route path="/classes/:classId/students/add" element={<ProtectedRoute><AddStudent /></ProtectedRoute>} />
+            <Route path="/courses" element={<ProtectedRoute><CourseList /></ProtectedRoute>} />
+            <Route path="/courses/create" element={<ProtectedRoute><CreateCourse /></ProtectedRoute>} />
+            <Route path="/courses/:id" element={<ProtectedRoute><CourseDetail /></ProtectedRoute>} />
+            <Route path="/courses/:courseId/chapter/:chapterId" element={<ProtectedRoute><CourseChapter /></ProtectedRoute>} />
+            <Route path="/labs" element={<ProtectedRoute><LabList /></ProtectedRoute>} />
+            <Route path="/labs/create" element={<ProtectedRoute><CreateLab /></ProtectedRoute>} />
+            <Route path="/labs/:id" element={<ProtectedRoute><LabDetail /></ProtectedRoute>} />
           </Routes>
         </main>
       </div>

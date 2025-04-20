@@ -1,9 +1,13 @@
 package vm
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/MeteorsLiu/virtuallabs/backend/api"
+	"github.com/gin-gonic/gin"
+)
 
 func Register(router *gin.Engine) {
 	// 虚拟机路由组
+	router.Use(api.JWTAuthMiddleware())
 	vmGroup := router.Group("/virtualmachines")
 	{
 		vmGroup.POST("/create-vm", CreateVMHandler)
