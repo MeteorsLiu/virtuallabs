@@ -43,6 +43,7 @@ export interface Class {
   className: string;
   headTeacherId?: number;
   createdAt: string;
+  HeadTeacher: User
 }
 
 export interface Experiment {
