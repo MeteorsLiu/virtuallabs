@@ -49,16 +49,13 @@ export interface Experiment {
   experimentId: number;
   experimentName: string;
   description: string;
-  difficultyLevel: 'beginner' | 'intermediate' | 'advanced';
-  duration: string;
-  content: string;
-  tasks: { title: string; completed?: boolean; }[];
   courseId?: number;
   createdAt: string;
-  progress?: number;
+  Course: Course
 }
 
 export interface VMDetailResponse {
+  vmId: number
   vmName: string;
   experimentId: number;
   vmDetails: string;
@@ -139,4 +136,11 @@ export interface SubmitAnswerRequest {
   assessmentId: number;
   questionId: number;
   selectedOptions: number[];
+}
+
+export interface Enrollment {
+  studentId: number;
+  courseId: number;
+  enrollmentTime: string;
+  course?: Course; // 根据后端实际返回结构定义
 }

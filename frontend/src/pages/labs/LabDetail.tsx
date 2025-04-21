@@ -1,47 +1,107 @@
-import React, { useState, useEffect } from 'react';
+import { Award, Clock, Edit, Loader, Play, Terminal, Trash2, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Terminal, Award, Clock, Play, CheckCircle, XCircle, Edit, Trash2 } from 'lucide-react';
 import { ExperimentAPI } from '../../api';
-import type { Experiment } from '../../types';
+import { apiClient } from '../../api/client';
+import type { Experiment, VMDetailResponse } from '../../types';
 
 function LabDetail() {
   const navigate = useNavigate();
   const { id } = useParams();
   const [lab, setLab] = useState<Experiment | null>(null);
+  const [vmDetails, setVmDetails] = useState<VMDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [terminalOutput, setTerminalOutput] = useState<string[]>([
-    '$ kubectl version',
-    'Client Version: v1.28.0',
-    'Server Version: v1.28.0',
-    '$ _'
-  ]);
+  const [isCreatingVM, setIsCreatingVM] = useState(false);
+  const [vmStatusPolling, setVmStatusPolling] = useState<ReturnType<typeof setInterval> | null>(null);
 
-  // 从 localStorage 获取用户角色
   const userRole = localStorage.getItem('userRole') || 'student';
   const isTeacher = userRole === 'teacher';
 
+  const pollVMStatus = useCallback(async (experimentId: number) => {
+    try {
+      const response = await apiClient.getVirtualMachine(experimentId);
+      setVmDetails(response[0]);
+
+      // If VM is still being created, continue polling
+      if (response[0].status === 'pending') {
+        return true;
+      }
+      return false;
+    } catch (err) {
+      console.error('Error polling VM status:', err);
+      return false;
+    }
+  }, []);
+
+  const startVMStatusPolling = useCallback((experimentId: number) => {
+    const intervalId = setInterval(async () => {
+      const shouldContinue = await pollVMStatus(experimentId);
+      if (!shouldContinue) {
+        clearInterval(intervalId);
+        setVmStatusPolling(null);
+      }
+    }, 5000); // Poll every 5 seconds
+
+    setVmStatusPolling(intervalId);
+    return intervalId;
+  }, [pollVMStatus]);
+
   useEffect(() => {
-    const fetchLab = async () => {
+    const fetchData = async () => {
       try {
         if (!id) return;
-        setLoading(true);
-        const response = await ExperimentAPI.getExperiment(Number(id));
-        setLab(response);
+        const experimentId = Number(id);
+        const [experimentResponse, vmResponse] = await Promise.all([
+          ExperimentAPI.getExperiment(experimentId),
+          apiClient.getVirtualMachine(experimentId).catch(() => null)
+        ]);
+        setLab(experimentResponse);
+        setVmDetails(vmResponse ? vmResponse[0] : null);
+
+        // If VM exists and is still being created, start polling
+        if (vmResponse && vmResponse?.[0]?.status === 'pending') {
+          startVMStatusPolling(experimentId);
+        }
       } catch (err) {
         setError('获取实验详情失败');
-        console.error('Error fetching lab:', err);
+        console.error('Error fetching experiment details:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchLab();
-  }, [id]);
+    fetchData();
+
+    return () => {
+      if (vmStatusPolling) {
+        clearInterval(vmStatusPolling);
+      }
+    };
+  }, [id, startVMStatusPolling]);
+
+  const handleCreateVM = async () => {
+    if (!lab) return;
+
+    try {
+      setIsCreatingVM(true);
+      const response = await apiClient.createVirtualMachine({
+        experimentId: lab.experimentId,
+        vmDetails: 'Standard Lab Environment'
+      });
+      setVmDetails(response);
+      startVMStatusPolling(lab.experimentId);
+    } catch (err) {
+      console.error('Error creating VM:', err);
+      setError('创建虚拟机失败');
+    } finally {
+      setIsCreatingVM(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!lab || !window.confirm('确定要删除这个实验吗？')) return;
-    
+
     try {
       await ExperimentAPI.deleteExperiment(lab.experimentId);
       navigate('/labs');
@@ -76,6 +136,72 @@ function LabDetail() {
     }
   };
 
+  const renderVMStatus = () => {
+    if (!vmDetails) {
+      return (
+        <button
+          onClick={handleCreateVM}
+          disabled={isCreatingVM}
+          className="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {isCreatingVM ? (
+            <>
+              <Loader className="animate-spin h-5 w-5 mr-2" />
+              创建虚拟机中...
+            </>
+          ) : (
+            <>
+              <Terminal className="h-5 w-5 mr-2" />
+              创建虚拟机
+            </>
+          )}
+        </button>
+      );
+    }
+
+    if (vmDetails.status === 'pending') {
+      return (
+        <div className="text-center py-4">
+          <Loader className="animate-spin h-8 w-8 text-indigo-600 mx-auto mb-2" />
+          <p className="text-gray-600">虚拟机创建中，请稍候...</p>
+        </div>
+      );
+    }
+
+    if (vmDetails.status === 'running') {
+      return (
+        <div className="bg-gray-900 rounded-lg overflow-hidden">
+          <div className="flex items-center justify-between p-2 bg-gray-800">
+            <div className="flex space-x-2">
+              <div className="h-3 w-3 rounded-full bg-red-500"></div>
+              <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
+              <div className="h-3 w-3 rounded-full bg-green-500"></div>
+            </div>
+            <span className="text-gray-400 text-sm">终端</span>
+          </div>
+          <iframe
+            src={`http://localhost:${6080+vmDetails.vmId}`}
+            className="w-full h-96 border-0"
+            title="Lab Terminal"
+          />
+        </div>
+      );
+    }
+
+    return (
+      <div className="text-center py-4">
+        <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+        <p className="text-red-600">虚拟机创建失败</p>
+        <button
+          onClick={handleCreateVM}
+          className="mt-2 text-indigo-600 hover:text-indigo-800"
+        >
+          重试
+        </button>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="bg-white shadow rounded-lg p-6">
@@ -96,7 +222,7 @@ function LabDetail() {
       <div className="bg-white shadow rounded-lg p-6">
         <div className="text-center text-red-600">
           <p>{error || '实验不存在'}</p>
-          <button 
+          <button
             onClick={() => navigate('/labs')}
             className="mt-4 text-indigo-600 hover:text-indigo-800"
           >
@@ -106,6 +232,8 @@ function LabDetail() {
       </div>
     );
   }
+
+
 
   return (
     <div className="bg-white shadow rounded-lg p-6">
@@ -140,13 +268,13 @@ function LabDetail() {
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900">{lab.experimentName}</h2>
         <div className="flex gap-4 mt-2">
-          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getDifficultyColor(lab.difficultyLevel)}`}>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getDifficultyColor(lab.Course.difficultyLevel)}`}>
             <Award className="h-4 w-4 mr-1" />
-            {getDifficultyText(lab.difficultyLevel)}
+            {getDifficultyText(lab.Course.difficultyLevel)}
           </span>
           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
             <Clock className="h-4 w-4 mr-1" />
-            预计时间: {lab.duration}
+            预计时间: 45分钟
           </span>
         </div>
       </div>
@@ -156,7 +284,7 @@ function LabDetail() {
           <div className="bg-gray-50 rounded-lg p-6">
             <h3 className="text-lg font-semibold mb-4">实验说明</h3>
             <div className="prose max-w-none">
-              {lab.content.split('\n').map((line, index) => (
+              {lab.description.split('\n').map((line, index) => (
                 <p key={index} className="mb-2">{line}</p>
               ))}
             </div>
@@ -164,24 +292,8 @@ function LabDetail() {
 
           {!isTeacher && (
             <div>
-              <h3 className="text-lg font-semibold mb-4">终端环境</h3>
-              <div className="bg-gray-900 rounded-lg p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex space-x-2">
-                    <div className="h-3 w-3 rounded-full bg-red-500"></div>
-                    <div className="h-3 w-3 rounded-full bg-yellow-500"></div>
-                    <div className="h-3 w-3 rounded-full bg-green-500"></div>
-                  </div>
-                  <Terminal className="h-5 w-5 text-gray-400" />
-                </div>
-                <div className="font-mono text-sm text-gray-300">
-                  {terminalOutput.map((line, index) => (
-                    <p key={index} className={index < 2 ? 'text-gray-500' : ''}>
-                      {line}
-                    </p>
-                  ))}
-                </div>
-              </div>
+              <h3 className="text-lg font-semibold mb-4">实验环境</h3>
+              {renderVMStatus()}
             </div>
           )}
         </div>
@@ -192,20 +304,18 @@ function LabDetail() {
               <div className="bg-gray-50 rounded-lg p-6">
                 <h3 className="text-lg font-semibold mb-4">实验进度</h3>
                 <div className="space-y-4">
-                  {lab.tasks.map((task, index) => (
-                    <div key={index} className="flex items-center justify-between">
-                      <span className="text-sm text-gray-600">{task.title}</span>
-                      {task.completed ? (
-                        <CheckCircle className="h-5 w-5 text-green-500" />
-                      ) : (
-                        <XCircle className="h-5 w-5 text-gray-300" />
-                      )}
+                    <div  className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">{lab.experimentName}</span>
+                      <XCircle className="h-5 w-5 text-gray-300" />
+
                     </div>
-                  ))}
                 </div>
               </div>
 
-              <button className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center">
+              <button
+                className="mt-4 w-full bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center"
+                disabled={!vmDetails || vmDetails.status !== 'running'}
+              >
                 <Play className="h-5 w-5 mr-2" />
                 继续实验
               </button>

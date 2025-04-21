@@ -43,7 +43,6 @@ func JWTAuthMiddleware() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "无效令牌"})
 			return
 		}
-
 		// 设置上下文信息
 		c.Set("userID", claims.UserID)
 		c.Set("userRole", claims.Role)

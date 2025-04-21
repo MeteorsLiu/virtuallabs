@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import type { Assessment, AuthResponse, Class, Course, CourseChapter, CreateAssessmentRequest, CreateQuestionRequest, Experiment, Question, User, VMDetailResponse } from '../../types';
+import type { Assessment, AuthResponse, Class, Course, CourseChapter, CreateAssessmentRequest, CreateQuestionRequest, Enrollment, Experiment, Question, User, VMDetailResponse } from '../../types';
 
 export class EduAPIClient {
   instance: AxiosInstance;
@@ -195,27 +195,22 @@ export class EduAPIClient {
   }
 
   // Virtual Machines
-  async getVirtualMachine(experimentId: number): Promise<VMDetailResponse> {
-    const response = await this.instance.get(`/experiments/${experimentId}/vm`);
+  async getVirtualMachine(experimentId: number): Promise<VMDetailResponse[]> {
+    const response = await this.instance.get(`/virtualmachines/get-experiment-vms/${experimentId}`);
     return response.data;
   }
 
   async createVirtualMachine(vmData: {
-    vmName: string;
     experimentId: number;
     vmDetails: string;
   }): Promise<VMDetailResponse> {
-    const response = await this.instance.post('/virtualmachines/', vmData);
+    const response = await this.instance.post('/virtualmachines/create-vm', vmData);
     return response.data;
   }
 
-  async updateVirtualMachine(id: number, vmData: Partial<VMDetailResponse>): Promise<VMDetailResponse> {
-    const response = await this.instance.put(`/virtualmachines/${id}`, vmData);
-    return response.data;
-  }
 
   async deleteVirtualMachine(id: number): Promise<void> {
-    await this.instance.delete(`/virtualmachines/${id}`);
+    await this.instance.post(`/virtualmachines/delete-vm/${id}`);
   }
 
 
@@ -247,6 +242,21 @@ export class EduAPIClient {
     optionIds: number[];
   }): Promise<void> {
     await this.instance.post(`/courses/assessments/${assessmentId}/submit`, answer);
+  }
+
+  async enroll(courseId: number): Promise<Enrollment> {
+    const response = await this.instance.post(`/courses/${courseId}/enroll`, {});
+    return response.data;
+  }
+
+  async unenroll(courseId: number): Promise<Enrollment> {
+    const response = await this.instance.delete(`/courses/${courseId}/enroll`, {});
+    return response.data;
+  }
+
+  async getEnrollments(): Promise<Enrollment[]> {
+    const response = await this.instance.get('/courses/enrollments');
+    return response.data;
   }
 
   // File Upload

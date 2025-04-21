@@ -30,6 +30,7 @@ type DeleteVMRequest struct {
 
 // 响应结构体
 type VMDetailResponse struct {
+	VMID         int       `json:"vmId"`
 	VMName       string    `json:"vmName"`
 	ExperimentID int       `json:"experimentId"`
 	VMDetails    string    `json:"vmDetails"`
@@ -113,10 +114,11 @@ func CreateVMHandler(c *gin.Context) {
 
 	tx.Commit()
 	c.JSON(http.StatusCreated, VMDetailResponse{
+		VMID:         newVM.VMID,
 		VMName:       newVM.VMName,
 		ExperimentID: newVM.ExperimentID,
 		VMDetails:    newVM.VMDetails,
-		Status:       "初始化中",
+		Status:       "pending",
 		CreatedAt:    time.Now(),
 	})
 }
@@ -146,10 +148,11 @@ func GetExperimentVMsHandler(c *gin.Context) {
 	response := make([]VMDetailResponse, 0, len(vms))
 	for _, vm := range vms {
 		response = append(response, VMDetailResponse{
+			VMID:         vm.VMID,
 			VMName:       vm.VMName,
 			ExperimentID: vm.ExperimentID,
 			VMDetails:    vm.VMDetails,
-			Status:       "运行中", // 实际应从业务系统获取
+			Status:       vm.Status, // 实际应从业务系统获取
 		})
 	}
 
@@ -159,32 +162,15 @@ func GetExperimentVMsHandler(c *gin.Context) {
 // 删除虚拟机
 func DeleteVMHandler(c *gin.Context) {
 	userID := c.GetInt("userID")
-	userRole := c.GetString("userRole")
 
-	var req DeleteVMRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var thisVm models.StudentVirtualMachine
+	err := api.DB.
+		Where("student_id = ?", userID).
+		First(&thisVm).Error
+
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "删除失败"})
 		return
-	}
-
-	// 查询虚拟机信息
-	var vm models.VirtualMachine
-	if err := api.DB.Where("vm_name = ?", req.VMName).First(&vm).Error; err != nil {
-		handleVMError(c, err)
-		return
-	}
-
-	// 权限验证（学生只能删除自己的）
-	if userRole == "student" {
-		var count int64
-		api.DB.Model(&models.StudentVirtualMachine{}).
-			Where("student_id = ? AND vm_id = ?", userID, vm.VMID).
-			Count(&count)
-
-		if count == 0 {
-			c.JSON(http.StatusForbidden, gin.H{"error": "无权操作该虚拟机"})
-			return
-		}
 	}
 
 	tx := api.DB.Begin()
@@ -195,14 +181,14 @@ func DeleteVMHandler(c *gin.Context) {
 	}()
 
 	// 删除虚拟机（级联删除关联关系）
-	if err := tx.Delete(&vm).Error; err != nil {
+	if err := tx.Where("vm_name = ?", thisVm.VirtualMachine.VMName).Delete(&thisVm.VirtualMachine).Error; err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除失败"})
 		return
 	}
 
 	// 发送删除请求
-	if err := queue.DeleteVM(vm.VMID, vm.VMName); err != nil {
+	if err := queue.DeleteVM(thisVm.VirtualMachine.VMID, thisVm.VirtualMachine.VMName); err != nil {
 		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "删除请求发送失败"})
 		return

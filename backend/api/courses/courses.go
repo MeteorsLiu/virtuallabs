@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/MeteorsLiu/virtuallabs/backend/api"
 	"github.com/MeteorsLiu/virtuallabs/backend/models"
@@ -651,4 +652,71 @@ func handleCourseError(c *gin.Context, err error) {
 
 func handleNotFound(c *gin.Context, resource string) {
 	c.JSON(http.StatusNotFound, gin.H{"error": resource + "不存在"})
+}
+
+// 新增处理函数
+func EnrollCourse(c *gin.Context) {
+	studentID := c.GetInt("userID")
+	courseID, _ := strconv.Atoi(c.Param("courseId"))
+
+	// 1. 检查用户是否存在
+	var user models.User
+	if err := api.DB.First(&user, studentID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	// 2. 检查课程是否存在
+	var course models.Course
+	if err := api.DB.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+
+	var enrollment models.Enrollment
+	if err := api.DB.Where("student_id = ? AND course_id = ?", studentID, courseID).First(&enrollment).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "Already enrolled in this course"})
+		return
+	}
+
+	newEnrollment := models.Enrollment{
+		StudentID:      studentID,
+		CourseID:       courseID,
+		EnrollmentTime: time.Now(),
+	}
+
+	if err := api.DB.Create(&newEnrollment).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enroll"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, newEnrollment)
+}
+
+func UnenrollCourse(c *gin.Context) {
+	studentID := c.GetInt("userID")
+	courseID := c.Param("courseId")
+
+	result := api.DB.Where("student_id = ? AND course_id = ?", studentID, courseID).Delete(&models.Enrollment{})
+	if result.RowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Enrollment not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"code":    http.StatusOK,
+		"message": "Unenrollment successful",
+	})
+}
+
+func GetStudentEnrollments(c *gin.Context) {
+	studentID := c.GetInt("userID")
+
+	var enrollments []models.Enrollment
+	if err := api.DB.Preload("Course").Where("student_id = ?", studentID).Find(&enrollments).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get enrollments"})
+		return
+	}
+
+	c.JSON(http.StatusOK, enrollments)
 }

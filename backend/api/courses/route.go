@@ -30,5 +30,10 @@ func Register(router *gin.Engine) {
 		course.POST("/assessments/question/", api.RoleMiddleware("teacher"), CreateQuestion)
 
 		course.GET("/assessments/:assessmentId/questions", GetAssessmentQuestions)
+
+		course.POST("/:courseId/enroll", api.RoleMiddleware("student"), EnrollCourse)
+		course.DELETE("/:courseId/enroll", api.RoleMiddleware("student"), UnenrollCourse)
+		course.GET("/enrollments", api.RoleMiddleware("student"), GetStudentEnrollments)
+
 	}
 }

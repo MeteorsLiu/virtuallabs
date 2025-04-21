@@ -1,20 +1,38 @@
-import React, { useState } from 'react';
+import { BookOpen, FileCode, FlaskRound as Flask } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FlaskRound as Flask, Plus, FileCode } from 'lucide-react';
 import { ExperimentAPI } from '../../api';
+import { apiClient } from '../../api/client';
+import type { Course } from '../../types';
 
 function CreateLab() {
   const navigate = useNavigate();
+  const [courses, setCourses] = useState<Course[]>([]);
   const [formData, setFormData] = useState({
     experimentName: '',
     description: '',
     difficulty: 'beginner' as const,
     duration: '',
     content: '',
+    courseId: '',
     tasks: [{ title: '环境准备' }, { title: '实验操作' }, { title: '结果验证' }]
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const response = await apiClient.getCourses();
+        setCourses(response);
+      } catch (err) {
+        console.error('Error fetching courses:', err);
+        setError('获取课程列表失败');
+      }
+    };
+
+    fetchCourses();
+  }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -23,11 +41,19 @@ function CreateLab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.courseId) {
+      setError('请选择关联课程');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
-      await ExperimentAPI.createExperiment(formData);
+      await ExperimentAPI.createExperiment({
+        ...formData,
+        courseId: Number(formData.courseId)
+      });
       navigate('/labs');
     } catch (err) {
       setError('创建实验失败，请重试');
@@ -93,6 +119,31 @@ function CreateLab() {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
+            关联课程
+          </label>
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <BookOpen className="h-5 w-5 text-gray-400" />
+            </div>
+            <select
+              name="courseId"
+              value={formData.courseId}
+              onChange={handleChange}
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              required
+            >
+              <option value="">选择关联课程</option>
+              {courses.map(course => (
+                <option key={course.courseId} value={course.courseId}>
+                  {course.courseName}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             实验描述
           </label>
           <textarea
@@ -144,9 +195,9 @@ function CreateLab() {
 
 ## 实验步骤
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ## 注意事项"
             required
