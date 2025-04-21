@@ -140,7 +140,7 @@ func GetStudentDetails(c *gin.Context) {
 func UpdateStudent(c *gin.Context) {
 	studentID, _ := strconv.Atoi(c.Param("id"))
 	currentUserID := c.GetInt("userID")
-	currentRole := c.GetString("role")
+	currentRole := c.GetString("userRole")
 
 	// 权限验证：学生只能修改自己，管理员/教师可以修改所有
 	if currentRole == "student" && currentUserID != studentID {

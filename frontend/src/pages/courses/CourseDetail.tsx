@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
-import { Clock, Award, BarChart } from 'lucide-react';
+import { Award, BarChart, Clock } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { apiClient } from '../../api/client';
 import type { Course, CourseChapter } from '../../types';
+import GradeList from './GradeList';
 
 function CourseDetail() {
   const navigate = useNavigate();
@@ -11,6 +12,7 @@ function CourseDetail() {
   const [chapters, setChapters] = useState<CourseChapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'chapters' | 'grades'>('chapters');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -56,7 +58,7 @@ function CourseDetail() {
       <div className="bg-white shadow rounded-lg p-6">
         <div className="text-center text-red-600">
           <p>{error || '课程不存在'}</p>
-          <button 
+          <button
             onClick={() => navigate('/courses')}
             className="mt-4 text-indigo-600 hover:text-indigo-800"
           >
@@ -79,7 +81,7 @@ function CourseDetail() {
       <div className="flex gap-6 mb-8">
         <div className="w-1/3">
           <img
-            src={course.coverUrl || "https://images.unsplash.com/photo-1667372393119-3d4c48d07fc9?auto=format&fit=crop&q=80&w=400"}
+            src={`http://localhost:8888${course.coverUrl}` || "https://images.unsplash.com/photo-1667372393119-3d4c48d07fc9?auto=format&fit=crop&q=80&w=400"}
             alt={course.courseName}
             className="w-full h-48 object-cover rounded-lg"
           />
@@ -106,8 +108,32 @@ function CourseDetail() {
         </div>
       </div>
 
-      <div className="mb-8">
-        <h3 className="text-xl font-semibold mb-4">课程大纲</h3>
+      <div className="border-b border-gray-200 mb-6">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab('chapters')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'chapters'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            课程大纲
+          </button>
+          <button
+            onClick={() => setActiveTab('grades')}
+            className={`py-4 px-1 border-b-2 font-medium text-sm ${
+              activeTab === 'grades'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            }`}
+          >
+            课程成绩
+          </button>
+        </nav>
+      </div>
+
+      {activeTab === 'chapters' ? (
         <div className="space-y-4">
           {chapters.map((chapter) => (
             <Link
@@ -121,20 +147,22 @@ function CourseDetail() {
               <p className="text-gray-600 mt-2">{chapter.chapterDescription}</p>
             </Link>
           ))}
-        </div>
 
-        {chapters.length === 0 && (
-          <div className="text-center py-8 bg-gray-50 rounded-lg">
-            <p className="text-gray-500">暂无章节内容</p>
-            <button
-              onClick={() => navigate(`/courses/${courseId}/chapters/create`)}
-              className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
-            >
-              添加章节
-            </button>
-          </div>
-        )}
-      </div>
+          {chapters.length === 0 && (
+            <div className="text-center py-8 bg-gray-50 rounded-lg">
+              <p className="text-gray-500">暂无章节内容</p>
+              <button
+                onClick={() => navigate(`/courses/${courseId}/chapters/create`)}
+                className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
+              >
+                添加章节
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <GradeList courseId={Number(courseId)} />
+      )}
     </div>
   );
 }

@@ -20,6 +20,8 @@ func Register(router *gin.Engine) {
 		course.POST("/:courseId/chapters", api.RoleMiddleware("teacher"), CreateChapter)
 		course.GET("/:courseId/chapters", GetChapters)
 
+		course.GET("/:courseId/grades", GetCourseGrades)
+
 		// 评分项路由
 		course.POST("/:courseId/assessments", api.RoleMiddleware("teacher"), CreateAssessment)
 
@@ -36,4 +38,7 @@ func Register(router *gin.Engine) {
 		course.GET("/enrollments", api.RoleMiddleware("student"), GetStudentEnrollments)
 
 	}
+
+	router.Group("/upload").Use(api.JWTAuthMiddleware()).POST("", UploadFile)
+
 }

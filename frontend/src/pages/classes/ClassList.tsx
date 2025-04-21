@@ -90,7 +90,7 @@ function ClassList() {
             <p className="text-sm text-gray-500 mt-1">创建时间: {new Date(classItem.createdAt).toLocaleDateString()}</p>
             <div className="mt-4 flex justify-between items-center">
               <span className="text-sm text-gray-500">
-                {classItem.headTeacherId ? `班主任: ${classItem.HeadTeacher.username}` : '暂无班主任'}
+                {classItem.headTeacherId ? `班主任: ${classItem.HeadTeacher?.username}` : '暂无班主任'}
               </span>
               <ChevronRight className="h-5 w-5 text-gray-400" />
             </div>

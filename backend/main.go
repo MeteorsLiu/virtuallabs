@@ -23,6 +23,8 @@ func main() {
 	api.InitDB("123456", dsn)
 	router := gin.Default()
 
+	router.Static("/uploads", "./uploads")
+
 	router.Use(api.UseCORS())
 
 	login.Register(router)

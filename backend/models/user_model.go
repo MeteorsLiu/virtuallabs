@@ -2,6 +2,8 @@ package models
 
 import (
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type User struct {
@@ -214,4 +216,12 @@ type StudentAnswerOption struct {
 	// 关联关系
 	Answer StudentAnswer  `gorm:"foreignKey:AnswerID;-:migration" json:"-"`
 	Option QuestionOption `gorm:"foreignKey:OptionID;-:migration" json:"option"`
+}
+
+func (sg *StudentGrade) GetCourseID(db *gorm.DB) (int, error) {
+	var assessment CourseAssessment
+	if err := db.Model(sg).Association("Assessment").Find(&assessment); err != nil {
+		return 0, err
+	}
+	return assessment.CourseID, nil
 }

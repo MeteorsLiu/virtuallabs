@@ -93,6 +93,9 @@ function CreateCourse() {
 
         // Update course with cover image URL
         await apiClient.updateCourse(course.courseId, {
+          courseName: courseTitle,
+          description: courseDescription,
+          difficultyLevel: difficulty,
             coverUrl: uploadResult.url
         });
       }

@@ -94,7 +94,7 @@ function CourseChapterView() {
             <h3 className="text-xl font-semibold mb-4">课程视频</h3>
             <div className="aspect-w-16 aspect-h-9 bg-gray-100 rounded-lg mb-6">
               {chapter.videoUrl ? (
-                <video src={chapter.videoUrl} controls className="w-full h-full rounded-lg" />
+                <video src={`http://localhost:8888${chapter.videoUrl}`} controls className="w-full h-full rounded-lg" />
               ) : (
                 <div className="flex items-center justify-center h-full">
                   <span className="text-gray-500">暂无视频内容</span>

@@ -79,7 +79,7 @@ function StudentAssessmentView({ courseId, chapterId }: StudentAssessmentViewPro
       const question = questions.find(q => q.questionId === questionId);
       if (!question) return prev;
 
-      if (question.type === 'single') {
+      if (question.questionType === 'single') {
         // For single choice, replace the answer
         return { ...prev, [questionId]: [optionId] };
       } else {
@@ -100,7 +100,7 @@ function StudentAssessmentView({ courseId, chapterId }: StudentAssessmentViewPro
 
     try {
       // Submit answers for each question
-      await Promise.all(
+     const res = await Promise.all(
         Object.entries(answers).map(([questionId, selectedOptions]) =>
           apiClient.submitAnswer(selectedAssessment.assessmentId, {
             questionId: Number(questionId),
@@ -108,6 +108,7 @@ function StudentAssessmentView({ courseId, chapterId }: StudentAssessmentViewPro
           })
         )
       );
+      setQuestions(res)
       setSubmitted(true);
     } catch (err) {
       console.error('Error submitting answers:', err);
@@ -155,6 +156,7 @@ function StudentAssessmentView({ courseId, chapterId }: StudentAssessmentViewPro
     );
   }
 
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -192,11 +194,11 @@ function StudentAssessmentView({ courseId, chapterId }: StudentAssessmentViewPro
               <p className="font-medium mb-4">
                 {qIndex + 1}. {question.content}
                 <span className="ml-2 text-sm text-gray-500">
-                  ({question.type === 'single' ? '单选题' : '多选题'})
+                  ({question.questionType === 'single' ? '单选题' : '多选题'})
                 </span>
               </p>
               <div className="space-y-2">
-                {question.options.map((option) => (
+                {question.options?.map((option) => (
                   <label
                     key={option.optionId}
                     className={`flex items-center p-3 rounded-lg cursor-pointer ${
@@ -214,7 +216,7 @@ function StudentAssessmentView({ courseId, chapterId }: StudentAssessmentViewPro
                     }`}
                   >
                     <input
-                      type={question.type === 'single' ? 'radio' : 'checkbox'}
+                      type={question.questionType === 'single' ? 'radio' : 'checkbox'}
                       checked={answers[question.questionId]?.includes(option.optionId)}
                       onChange={() => handleAnswerSelect(question.questionId, option.optionId)}
                       disabled={submitted}

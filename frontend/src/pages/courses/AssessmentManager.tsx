@@ -420,7 +420,7 @@ function AssessmentManager({ courseId, chapterId }: AssessmentManagerProps) {
                         </div>
                       </div>
                       <div className="mt-4 space-y-2">
-                        {question.options.map((option, oIndex) => (
+                        {question.options?.map((option, oIndex) => (
                           <div
                             key={option.optionId}
                             className={`flex items-center p-3 rounded-lg ${
@@ -454,3 +454,5 @@ function AssessmentManager({ courseId, chapterId }: AssessmentManagerProps) {
 }
 
 export default AssessmentManager;
+
+

@@ -1,5 +1,5 @@
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import type { Assessment, AuthResponse, Class, Course, CourseChapter, CreateAssessmentRequest, CreateQuestionRequest, Enrollment, Experiment, Question, User, VMDetailResponse } from '../../types';
+import type { Assessment, AuthResponse, Class, Course, CourseChapter, CreateAssessmentRequest, CreateQuestionRequest, Enrollment, Experiment, Question, StudentGrade, User, VMDetailResponse } from '../../types';
 
 export class EduAPIClient {
   instance: AxiosInstance;
@@ -236,12 +236,19 @@ export class EduAPIClient {
     return response.data;
   }
 
+  async getStudentGrade(courseId: number): Promise<StudentGrade[]> {
+    const response = await this.instance.get(`/courses/${courseId}/grades`);
+    return response.data;
+  }
+
+
   // Assessments
   async submitAnswer(assessmentId: number, answer: {
     questionId: number;
     optionIds: number[];
-  }): Promise<void> {
-    await this.instance.post(`/courses/assessments/${assessmentId}/submit`, answer);
+  }): Promise<Question> {
+    const response = await this.instance.post(`/courses/assessments/${assessmentId}/submit`, answer);
+    return response.data.question;
   }
 
   async enroll(courseId: number): Promise<Enrollment> {

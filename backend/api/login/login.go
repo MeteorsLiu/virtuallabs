@@ -16,8 +16,8 @@ import (
 
 // 请求结构体
 type RegisterRequest struct {
-	Username  string `json:"username" binding:"required,min=5,max=50"`
-	Password  string `json:"password" binding:"required,min=8,max=50"`
+	Username  string `json:"username" binding:"required"`
+	Password  string `json:"password" binding:"required"`
 	Role      string `json:"role" binding:"required,oneof=student teacher"`
 	StudentNo string `json:"studentNo,omitempty"` // 仅学生需要
 	Gender    string `json:"gender" binding:"oneof=male female other"`

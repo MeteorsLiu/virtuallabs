@@ -20,8 +20,8 @@ import (
 //
 
 type CourseCreateRequest struct {
-	CourseName      string `json:"courseName" binding:"required,min=3,max=100"`
-	CoverURL        string `json:"coverUrl" binding:"omitempty,url"`
+	CourseName      string `json:"courseName" binding:"required"`
+	CoverURL        string `json:"coverUrl" binding:"omitempty"`
 	Description     string `json:"description"`
 	DifficultyLevel string `json:"difficultyLevel" binding:"oneof=beginner intermediate advanced"`
 }
@@ -252,7 +252,7 @@ func CreateAssessment(c *gin.Context) {
 	c.JSON(http.StatusCreated, assessment)
 }
 
-// 提交答案并自动计算成绩
+// 提交答案并返回用户回答+正确答案
 func SubmitAnswer(c *gin.Context) {
 	studentID := c.GetInt("userID")
 	assessmentID, _ := strconv.Atoi(c.Param("assessmentId"))
@@ -267,39 +267,35 @@ func SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	// 验证题目属于当前assessment
+	// 获取题目及正确答案
 	var question models.Question
-	if err := api.DB.First(&question, req.QuestionID).Error; err != nil || question.AssessmentID != assessmentID {
+
+	if err := api.DB.Preload("Options").
+		Where("questions.question_id = ? AND questions.assessment_id = ?", req.QuestionID, assessmentID).
+		First(&question).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "无效题目或评分项"})
 		return
 	}
 
 	tx := api.DB.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
+	defer tx.Rollback()
 
-	// 保存答题记录
+	// 保存原始答题记录（保持原结构不变）
 	answer := models.StudentAnswer{
 		StudentID:  studentID,
 		QuestionID: req.QuestionID,
 	}
-
 	if err := tx.Create(&answer).Error; err != nil {
-		tx.Rollback()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "保存答案失败"})
 		return
 	}
 
-	// 保存选中选项
+	// 保存原始选项记录
 	for _, optID := range req.OptionIDs {
 		if err := tx.Create(&models.StudentAnswerOption{
 			AnswerID: answer.AnswerID,
 			OptionID: optID,
 		}).Error; err != nil {
-			tx.Rollback()
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "保存选项失败"})
 			return
 		}
@@ -311,10 +307,10 @@ func SubmitAnswer(c *gin.Context) {
 		return
 	}
 
-	// 异步触发分数计算
-	go func() {
-		calculateAndSaveGrade(studentID, assessmentID)
-	}()
+	// 异步计算保持不变
+	go calculateAndSaveGrade(studentID, assessmentID)
+
+	answer.Question = question
 
 	c.JSON(http.StatusCreated, answer)
 }
@@ -551,7 +547,7 @@ func GetCourseAssessments(c *gin.Context) {
 func GetAssessmentQuestions(c *gin.Context) {
 	// 获取当前用户信息
 	currentUserID := c.GetInt("userID")
-	userRole := c.GetString("role")
+	userRole := c.GetString("userRole")
 
 	// 解析参数
 	assessmentID, err := strconv.Atoi(c.Param("assessmentId"))
@@ -719,4 +715,55 @@ func GetStudentEnrollments(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, enrollments)
+}
+
+func GetCourseGrades(c *gin.Context) {
+	userID := c.GetInt("userID")
+	courseID := c.Param("courseId")
+
+	// 检查课程是否存在
+	var course models.Course
+	if err := api.DB.First(&course, courseID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Course not found"})
+		return
+	}
+
+	// 根据角色处理
+	role := c.GetString("userRole")
+	query := api.DB.Model(&models.StudentGrade{}).
+		Preload("Student").
+		Preload("Assessment").
+		Preload("Grader").
+		Joins("JOIN course_assessments ON student_grades.assessment_id = course_assessments.assessment_id").
+		Where("course_assessments.course_id = ?", courseID)
+
+	switch role {
+	case "teacher":
+		// 验证教师是否负责该课程
+		var teaching models.TeacherCourse
+		if err := api.DB.Where("teacher_id = ? AND course_id = ?", userID, courseID).First(&teaching).Error; err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Not teaching this course"})
+			return
+		}
+	case "student":
+		// 验证学生是否选课
+		var enrollment models.Enrollment
+		if err := api.DB.Where("student_id = ? AND course_id = ?", userID, courseID).First(&enrollment).Error; err != nil {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Not enrolled in this course"})
+			return
+		}
+		query = query.Where("student_grades.student_id = ?", userID)
+	default:
+		c.JSON(http.StatusForbidden, gin.H{"error": "Unauthorized role"})
+		return
+	}
+
+	// 查询成绩
+	var grades []models.StudentGrade
+	if err := query.Find(&grades).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve grades"})
+		return
+	}
+
+	c.JSON(http.StatusOK, grades)
 }

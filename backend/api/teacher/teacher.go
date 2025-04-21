@@ -122,7 +122,7 @@ func GetTeacherDetails(c *gin.Context) {
 func UpdateTeacher(c *gin.Context) {
 	teacherID, _ := strconv.Atoi(c.Param("id"))
 	currentUserID := c.GetInt("userID")
-	currentRole := c.GetString("role")
+	currentRole := c.GetString("userRole")
 
 	// 权限验证：教师只能修改自己，管理员可以修改所有
 	if currentRole == "teacher" && currentUserID != teacherID {
